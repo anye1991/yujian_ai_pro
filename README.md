@@ -59,7 +59,7 @@ yujian_ai_pro/
 1. 克隆项目
 
 ```bash
-git clone https://gitee.com/nights-shadow/yujian_ai_pro.git
+git clone https://github.com/anye1991/yujian_ai_pro.git
 cd yujian_ai_pro
 ```
 
