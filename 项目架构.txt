@@ -1,0 +1,13 @@
+yujian_ai_pro/
+├── ai_assistant.py          # 主程序
+├── universal_scanner.py     # 通用扫描器
+├── universal_attacker.py    # 通用攻击器  
+├── ai_detector.py          # AI智能检测引擎
+├── attack_modules/         # 攻击模块库
+│   ├── cms_attacks.py      # CMS攻击（WordPress, Joomla等）
+│   ├── framework_attacks.py # 框架攻击
+│   ├── api_attacks.py      # API攻击
+│   ├── auth_attacks.py     # 认证攻击
+│   └── vuln_scanner.py     # 通用漏洞扫描
+├── config.yaml             # 配置文件
+└── results/               # 结果目录

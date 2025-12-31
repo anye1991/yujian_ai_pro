@@ -1,0 +1,56 @@
+# 📦 YujianAI Pro - 完整依赖列表
+# 版本号指定了经过测试的稳定版本
+
+# 🔧 核心HTTP库
+requests>=2.31.0  # 稳定、安全、支持HTTP/2
+urllib3>=2.0.0    # requests的底层依赖，支持HTTP/1.1和HTTP/2
+
+# 📄 HTML解析
+beautifulsoup4>=4.12.0  # HTML解析，必须配合lxml或html5lib
+lxml>=4.9.0             # 快速XML/HTML解析器
+
+# 🎨 终端美化
+colorama>=0.4.6         # Windows/Linux/macOS跨平台彩色输出
+rich>=13.0.0            # 高级终端格式化（可选但推荐）
+
+# 📁 配置文件
+pyyaml>=6.0             # YAML配置文件解析
+python-dotenv>=1.0.0    # 环境变量管理
+
+# 🔐 加密与安全
+cryptography>=41.0.0    # 加密算法、SSL/TLS
+pyOpenSSL>=23.2.0       # OpenSSL绑定
+
+# 📊 数据处理
+python-magic>=0.4.27    # 文件类型识别
+chardet>=5.2.0          # 字符编码检测
+
+# 🚀 性能优化
+aiohttp>=3.8.0          # 异步HTTP客户端（可选）
+httpx>=0.24.0           # 下一代HTTP客户端（可选）
+
+# 📝 日志与调试
+loguru>=0.7.0           # 现代化日志记录（推荐替代logging）
+tqdm>=4.65.0            # 进度条显示
+
+# 🧪 测试与开发
+pytest>=7.4.0           # 单元测试
+pytest-asyncio>=0.21.0  # 异步测试
+black>=23.0.0           # 代码格式化
+flake8>=6.0.0           # 代码检查
+mypy>=1.5.0             # 类型检查
+
+# 🐳 可选AI功能
+openai>=1.0.0           # OpenAI API（可选）
+ollama>=0.1.0           # Ollama本地AI（可选）
+langchain>=0.0.300      # AI链式调用（可选）
+
+# 📡 网络工具
+dnspython>=2.4.0        # DNS查询
+ipaddress>=1.0.0        # IP地址处理
+netaddr>=0.8.0          # 网络地址操作
+
+# 🔍 安全相关
+scapy>=2.5.0            # 数据包操作（高级功能）
+paramiko>=3.2.0         # SSH客户端
+impacket>=0.10.0        # 网络协议实现

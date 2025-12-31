@@ -1,0 +1,331 @@
+# YujianAI Pro - 通用渗透测试工具配置
+version: "2.0"
+author: "YujianAI Team"
+
+# AI引擎配置
+ai:
+  enabled: true
+  model: "mistral:7b"  # Ollama模型
+  ollama_url: "http://localhost:11434"
+  timeout: 30
+  temperature: 0.3
+  max_tokens: 500
+  
+  # 支持的模型列表（根据你的Ollama列表）
+  available_models:
+    - "mistral:7b"
+    - "llama3.1:latest"
+    - "llama3.2:1b"
+    - "codellama:7b"
+    - "deepseek-coder:6.7b"
+
+# 扫描配置
+scan:
+  # 扫描模式: quick(快速), normal(正常), aggressive(激进), full(完整)
+  mode: "aggressive"
+  threads: 15
+  timeout: 15
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  
+  # 字典配置
+  wordlists:
+    directories: "wordlists/directories.txt"
+    subdomains: "wordlists/subdomains.txt"
+    parameters: "wordlists/parameters.txt"
+    
+  # 技术栈识别
+  detect_technologies: true
+  detect_cms: true
+  detect_frameworks: true
+  detect_waf: true
+  
+  # 输出详细程度: 0(安静), 1(正常), 2(详细), 3(调试)
+  verbosity: 2
+
+# 攻击配置
+attack:
+  # 认证攻击
+  authentication:
+    enabled: true
+    threads: 10
+    max_attempts: 200
+    timeout: 10
+    
+    # 凭证库
+    credential_files:
+      - "wordlists/usernames.txt"
+      - "wordlists/passwords.txt"
+      - "wordlists/default_creds.txt"
+    
+    # 常见默认凭证
+    default_credentials:
+      - ["admin", "admin"]
+      - ["admin", "password"]
+      - ["admin", "123456"]
+      - ["administrator", "admin"]
+      - ["root", "root"]
+      - ["test", "test"]
+      - ["guest", "guest"]
+  
+  # SQL注入测试
+  sql_injection:
+    enabled: true
+    level: "normal"  # quick/normal/aggressive
+    test_blind: true
+    test_time_based: true
+    test_error_based: true
+    
+  # XSS测试
+  xss:
+    enabled: true
+    level: "normal"
+    test_reflected: true
+    test_stored: false
+    test_dom: true
+    
+  # 命令注入测试
+  command_injection:
+    enabled: true
+    level: "normal"
+    
+  # 文件包含测试
+  file_inclusion:
+    enabled: true
+    level: "normal"
+    
+  # 路径遍历测试
+  path_traversal:
+    enabled: true
+    level: "normal"
+    
+  # 信息泄露测试
+  information_disclosure:
+    enabled: true
+    check_backup_files: true
+    check_config_files: true
+    check_source_code: true
+    
+  # API安全测试
+  api_security:
+    enabled: true
+    test_methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    test_authentication: true
+    test_rate_limiting: true
+    test_input_validation: true
+
+# 工作流配置
+workflow:
+  # 测试阶段
+  phases:
+    - "reconnaissance"      # 信息收集
+    - "vulnerability_scan"  # 漏洞扫描
+    - "exploitation"        # 漏洞利用
+    - "post_exploitation"   # 后渗透
+    - "reporting"           # 报告生成
+    
+  # 自动化选项
+  auto_detect_target: true
+  auto_select_attacks: true
+  stop_on_success: false
+  max_execution_time: 3600  # 最大执行时间（秒）
+  
+  # 智能决策
+  use_ai_for_decisions: true
+  risk_threshold: "medium"  # 风险阈值
+
+# 输出配置
+output:
+  # 报告格式
+  report_formats:
+    - "json"
+    - "html"
+    - "markdown"
+    - "pdf"
+    
+  # 保存选项
+  save_all_results: true
+  save_screenshots: false
+  compress_reports: true
+  
+  # 目录结构
+  directories:
+    results: "results"
+    logs: "logs"
+    screenshots: "screenshots"
+    wordlists: "wordlists"
+    configs: "configs"
+    
+  # 日志配置
+  logging:
+    level: "INFO"
+    file: "logs/yujianai.log"
+    max_size: "10MB"
+    backup_count: 5
+
+# 代理配置（可选）
+proxy:
+  enabled: false
+  http: "http://127.0.0.1:8080"
+  https: "http://127.0.0.1:8080"
+  socks5: "socks5://127.0.0.1:9050"
+  
+  # 代理轮换
+  rotate_proxies: false
+  proxy_list: "configs/proxies.txt"
+
+# 高级配置
+advanced:
+  # 性能优化
+  rate_limit: 10  # 每秒请求数
+  connection_pool: 50
+  retry_attempts: 3
+  backoff_factor: 0.5
+  
+  # 请求头
+  custom_headers:
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Language: "zh-CN,zh;q=0.9,en;q=0.8"
+    Accept-Encoding: "gzip, deflate"
+    DNT: "1"
+    Upgrade-Insecure-Requests: "1"
+    
+  # Cookie管理
+  use_cookies: true
+  cookie_jar: "cookies.txt"
+  
+  # SSL配置
+  verify_ssl: false
+  ssl_timeout: 10
+  
+  # 缓存
+  cache_enabled: true
+  cache_ttl: 3600  # 缓存时间（秒）
+  cache_dir: "cache"
+
+# 模块配置
+modules:
+  # CMS攻击模块
+  cms_attacks:
+    wordpress:
+      enabled: true
+      version_detection: true
+      plugin_vulnerabilities: true
+      theme_vulnerabilities: true
+      
+    joomla:
+      enabled: true
+      version_detection: true
+      component_vulnerabilities: true
+      
+    drupal:
+      enabled: true
+      version_detection: true
+      module_vulnerabilities: true
+      
+    magento:
+      enabled: true
+      version_detection: true
+      
+  # 框架攻击模块
+  framework_attacks:
+    laravel:
+      enabled: true
+      debug_mode: true
+      env_exposure: true
+      
+    django:
+      enabled: true
+      debug_mode: true
+      admin_panel: true
+      
+    spring:
+      enabled: true
+      actuator_endpoints: true
+      
+    express:
+      enabled: true
+      debug_endpoints: true
+  
+  # API攻击模块
+  api_attacks:
+    rest_api:
+      enabled: true
+      test_methods: true
+      test_parameters: true
+      test_authentication: true
+      
+    graphql:
+      enabled: true
+      introspection: true
+      batching_attacks: true
+      
+    soap:
+      enabled: true
+      wsdl_analysis: true
+  
+  # 认证攻击模块
+  auth_attacks:
+    brute_force:
+      enabled: true
+      methods: ["post", "get", "json"]
+      detect_captcha: true
+      bypass_captcha: false
+      
+    session_attacks:
+      enabled: true
+      session_fixation: true
+      session_hijacking: true
+      
+    oauth_attacks:
+      enabled: true
+      misconfiguration: true
+      token_leakage: true
+
+# 插件系统
+plugins:
+  # 外部工具集成
+  external_tools:
+    nmap:
+      enabled: true
+      path: "/usr/bin/nmap"
+      arguments: "-sV -sC -O"
+      
+    sqlmap:
+      enabled: true
+      path: "/usr/bin/sqlmap"
+      
+    wpscan:
+      enabled: true
+      path: "/usr/bin/wpscan"
+      
+  # 自定义插件
+  custom_plugins:
+    enabled: false
+    directory: "plugins"
+
+# 通知配置（可选）
+notifications:
+  enabled: false
+  slack:
+    webhook_url: ""
+    channel: "#security"
+    
+  discord:
+    webhook_url: ""
+    
+  email:
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    recipient: ""
+    
+  webhook:
+    url: ""
+    secret: ""
+
+# 更新配置
+updates:
+  check_for_updates: true
+  auto_update: false
+  update_channel: "stable"  # stable/beta/nightly
