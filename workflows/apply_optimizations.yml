@@ -1,0 +1,398 @@
+name: Apply AI Optimizations
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with token)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.AUTOMATION_TOKEN }}
+          fetch-depth: 0
+
+      - name: Create branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -C feat/ai-core
+
+      - name: Write files (dict_manager, decision_engine, runner, progress, plugin_interface, rules)
+        run: |
+          mkdir -p yujian_ai_pro/core
+          mkdir -p yujian_ai_pro/plugins
+          mkdir -p rules
+          # dict_manager.py
+          cat > yujian_ai_pro/core/dict_manager.py <<'PY'
+#!/usr/bin/env python3
+# yujian_ai_pro/core/dict_manager.py
+import os
+import json
+import yaml
+import time
+import hashlib
+import threading
+from pathlib import Path
+from random import shuffle, choices
+from typing import List, Dict, Optional
+import requests
+
+DEFAULT_DICT_DIR = "dicts"
+
+class DictManager:
+    """
+    Features:
+    - 本地扫描 dicts 目录，支持 txt/json/yaml
+    - 支持从 URL 拉取远端字典（简单缓存）
+    - 去重、按权重展开（支持 dict->{item:weight}）
+    - sample(name, n, weighted)
+    - reload() 支持热加载（可被外部 watch 调用）
+    """
+    def __init__(self, dict_dir: str = DEFAULT_DICT_DIR):
+        self.dict_dir = Path(dict_dir)
+        self.lock = threading.RLock()
+        self.store: Dict[str, List[str]] = {}
+        self.remote_cache: Dict[str, Dict] = {}  # url -> {etag, ts, items}
+        self.load_all()
+
+    def _parse_file(self, path: Path) -> List[str]:
+        try:
+            if path.suffix in (".yaml", ".yml"):
+                items = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+            elif path.suffix == ".json":
+                items = json.loads(path.read_text(encoding="utf-8"))
+            else:
+                items = [l.strip() for l in path.read_text(encoding="utf-8", errors="ignore").splitlines() if l.strip()]
+            if isinstance(items, dict):
+                flat = []
+                for k, w in items.items():
+                    flat.extend([k] * max(1, int(w)))
+                items = flat
+            if not isinstance(items, list):
+                return []
+            # 去重且保持顺序
+            seen = set()
+            out = []
+            for x in items:
+                if x not in seen:
+                    seen.add(x)
+                    out.append(str(x))
+            return out
+        except Exception:
+            return []
+
+    def load_all(self):
+        with self.lock:
+            self.store.clear()
+            if not self.dict_dir.exists():
+                return
+            for p in self.dict_dir.rglob("*"):
+                if p.is_file():
+                    name = p.stem
+                    items = self._parse_file(p)
+                    if items:
+                        self.store[name] = items
+
+    def reload(self):
+        self.load_all()
+
+    def get(self, name: str) -> List[str]:
+        with self.lock:
+            return list(self.store.get(name, []))
+
+    def sample(self, name: str, n: int = 100, weighted: bool = False) -> List[str]:
+        lst = self.get(name)
+        if not lst:
+            return []
+        if weighted:
+            # 如果原 list 已按权重重复填充，则直接 choices
+            return choices(lst, k=min(n, len(lst)))
+        shuffle(lst)
+        return lst[:min(n, len(lst))]
+
+    def add_remote(self, url: str, name: Optional[str] = None, force=False) -> List[str]:
+        """
+        拉取远程字典（简单 ETag 缓存），并将其放到 store[name].
+        """
+        name = name or hashlib.sha1(url.encode()).hexdigest()[:8]
+        headers = {}
+        cached = self.remote_cache.get(url)
+        if cached and not force:
+            headers['If-None-Match'] = cached.get('etag', '')
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            if r.status_code == 304:
+                return cached.get('items', [])
+            if r.status_code != 200:
+                return []
+            text = r.text
+            items = [l.strip() for l in text.splitlines() if l.strip()]
+            with self.lock:
+                # 合并到 store
+                existing = self.store.get(name, [])
+                merged = list(dict.fromkeys(existing + items))
+                self.store[name] = merged
+                self.remote_cache[url] = {'etag': r.headers.get('ETag', ''), 'ts': time.time(), 'items': merged}
+            return merged
+        except Exception:
+            return []
+PY
+
+          # decision_engine.py
+          cat > yujian_ai_pro/core/decision_engine.py <<'PY'
+#!/usr/bin/env python3
+# yujian_ai_pro/core/decision_engine.py
+import yaml
+from typing import Dict, Any, List, Callable
+
+class DecisionEngine:
+    """
+    rules.yaml 格式示例（简要）:
+    - match:
+        cms: wordpress
+      strategy:
+        plugins: ["http_enum","wp_scan"]
+        dicts: ["wp_paths","common_creds"]
+        concurrency: 8
+        timeout: 20
+        risk_level: low
+    """
+    def __init__(self, rules_file: str = "rules/strategy_rules.yaml"):
+        self.rules_file = rules_file
+        self.rules = []
+        self.load_rules()
+
+    def load_rules(self):
+        try:
+            with open(self.rules_file, "r", encoding="utf-8") as f:
+                raw = yaml.safe_load(f) or []
+            self.rules = []
+            for r in raw:
+                match = r.get("match", {})
+                strat = r.get("strategy", {})
+                self.rules.append((match, strat))
+        except FileNotFoundError:
+            self.rules = []
+
+    def _match_profile(self, profile: Dict[str, Any], matcher: Dict[str, Any]) -> bool:
+        # 简单匹配器：key 存在并且包含（忽略大小写）
+        for k, v in matcher.items():
+            pv = profile.get(k)
+            if pv is None:
+                return False
+            if isinstance(v, str):
+                if v.lower() not in str(pv).lower():
+                    return False
+            else:
+                if pv != v:
+                    return False
+        return True
+
+    def decide(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        for matcher, strat in self.rules:
+            try:
+                if self._match_profile(profile, matcher):
+                    return strat
+            except Exception:
+                continue
+        # 默认策略
+        return {
+            "plugins": ["port_scan", "http_enum"],
+            "dicts": ["common_usernames", "common_passwords"],
+            "concurrency": 10,
+            "timeout": 30,
+            "risk_level": "medium"
+        }
+PY
+
+          # plugin_interface.py
+          cat > yujian_ai_pro/plugins/plugin_interface.py <<'PY'
+#!/usr/bin/env python3
+# yujian_ai_pro/plugins/plugin_interface.py
+from typing import Any, Dict
+
+class BasePlugin:
+    """
+    插件必须实现：
+    - name: 插件名称
+    - prepare(target, strategy, context)
+    - execute(target, strategy, context) -> dict
+    - cleanup()
+    """
+    name = "base"
+
+    def prepare(self, target: str, strategy: Dict[str, Any], context: Dict[str, Any]) -> None:
+        pass
+
+    def execute(self, target: str, strategy: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        raise NotImplementedError()
+
+    def cleanup(self) -> None:
+        pass
+PY
+
+          # runner.py
+          cat > yujian_ai_pro/core/runner.py <<'PY'
+#!/usr/bin/env python3
+# yujian_ai_pro/core/runner.py
+import sqlite3
+import time
+import json
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Dict, Any, Callable, Optional
+import subprocess
+import os
+import signal
+import resource  # Unix only
+
+CHECKPOINT_DB = "yujian_runner.db"
+
+class Runner:
+    def __init__(self, max_workers=10, db_path: str = CHECKPOINT_DB):
+        self.max_workers = max_workers
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self):
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        cur = self.conn.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS tasks (
+            id TEXT PRIMARY KEY, target TEXT, plugin TEXT, status TEXT, result TEXT, updated_at REAL
+        )""")
+        self.conn.commit()
+
+    def _save_task(self, tid: str, target: str, plugin: str, status: str, result: Dict[str, Any]):
+        cur = self.conn.cursor()
+        cur.execute("INSERT OR REPLACE INTO tasks(id,target,plugin,status,result,updated_at) VALUES(?,?,?,?,?,?)",
+                    (tid, target, plugin, status, json.dumps(result, ensure_ascii=False), time.time()))
+        self.conn.commit()
+
+    def _run_plugin_with_timeout(self, plugin_exec: Callable[[], Dict[str, Any]], timeout: int) -> Dict[str, Any]:
+        # 用线程池实现超时控制
+        with ThreadPoolExecutor(max_workers=1) as ex:
+            fut = ex.submit(plugin_exec)
+            try:
+                return fut.result(timeout=timeout)
+            except Exception as e:
+                try:
+                    fut.cancel()
+                except Exception:
+                    pass
+                return {"status": "error", "error": str(e), "trace": traceback.format_exc()}
+
+    def run_tasks(self, tasks: List[Dict[str, Any]], concurrency: Optional[int] = None):
+        concurrency = concurrency or self.max_workers
+        results = []
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futures = {}
+            for t in tasks:
+                future = pool.submit(self._run_single_task, t)
+                futures[future] = t
+            for fut in as_completed(futures):
+                res = fut.result()
+                results.append(res)
+        return results
+
+    def _apply_rlimits(self, cpu_seconds: int = 10, mem_bytes: int = 256 * 1024 * 1024):
+        try:
+            # CPU seconds
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds + 1))
+            # Max address space
+            resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+        except Exception:
+            pass  # 非 Unix 或无权限时忽略
+
+    def _run_single_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+        tid = task.get("id")
+        target = task.get("target")
+        plugin = task.get("plugin")
+        strategy = task.get("strategy", {})
+        timeout = int(strategy.get("timeout", 30))
+        retries = int(strategy.get("retries", 1))
+        cpu_limit = int(strategy.get("cpu_seconds", 30))
+        mem_limit = int(strategy.get("mem_bytes", 256 * 1024 * 1024))
+
+        attempt = 0
+        while attempt < retries:
+            attempt += 1
+            try:
+                def plugin_exec():
+                    # 在这里应用 rlimit（当前进程）
+                    self._apply_rlimits(cpu_limit, mem_limit)
+                    # plugin 应该是一个可调用返回 dict
+                    return task["callable"](target, strategy)
+                res = self._run_plugin_with_timeout(plugin_exec, timeout)
+                status = res.get("status", "ok" if "error" not in res else "error")
+                self._save_task(tid or f"{target}:{plugin}:{attempt}", target, plugin, status, res)
+                return {"id": tid, "target": target, "plugin": plugin, "status": status, "result": res}
+            except Exception as e:
+                err = {"status": "error", "error": str(e), "trace": traceback.format_exc()}
+                self._save_task(tid or f"{target}:{plugin}:{attempt}", target, plugin, "error", err)
+                if attempt >= retries:
+                    return {"id": tid, "target": target, "plugin": plugin, "status": "error", "result": err}
+                time.sleep(1 * attempt)
+PY
+
+          # progress.py
+          cat > yujian_ai_pro/core/progress.py <<'PY'
+#!/usr/bin/env python3
+# yujian_ai_pro/core/progress.py
+import time
+from collections import defaultdict
+from typing import Callable, Dict, Any
+
+class ProgressManager:
+    def __init__(self):
+        self.states: Dict[str, Dict[str, Any]] = {}
+        self.history = defaultdict(list)
+        self.subscribers = []  # list of callables to push updates
+
+    def subscribe(self, cb: Callable[[str, Dict[str, Any]], None]):
+        self.subscribers.append(cb)
+
+    def emit(self, task_id: str, status: str, detail: Dict[str, Any] = None):
+        ts = time.time()
+        payload = {"status": status, "detail": detail or {}, "ts": ts}
+        self.states[task_id] = payload
+        self.history[task_id].append(payload)
+        for cb in list(self.subscribers):
+            try:
+                cb(task_id, payload)
+            except Exception:
+                pass
+PY
+
+          # rules/strategy_rules.yaml
+          cat > rules/strategy_rules.yaml <<'YAML'
+- match:
+    cms: wordpress
+  strategy:
+    plugins: ["http_enum","wp_scan"]
+    dicts: ["wp_paths","common_creds"]
+    concurrency: 6
+    timeout: 25
+    retries: 2
+    risk_level: low
+
+- match:
+    services: ssh
+  strategy:
+    plugins: ["ssh_bruteforce"]
+    dicts: ["ssh_usernames","ssh_passwords"]
+    concurrency: 4
+    timeout: 15
+    retries: 3
+    risk_level: medium
+YAML
+
+      - name: Commit & Push
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          git add -A
+          git commit -m "feat: add AI core modules (dict_manager, decision_engine, runner, progress, plugin_interface)" || echo "No changes to commit"
+          git push origin feat/ai-core --force
