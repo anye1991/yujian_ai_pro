@@ -189,5 +189,5 @@ python ai_assistant.py http://testphp.vulnweb.com
 # 探索更多功能
 python ai_assistant.py --interactive
 ```
-
+贡献作者：anye1991
 > **免责声明**：本工具仅用于合法的安全测试和教育目的。使用者应对自己的行为负责。作者不对任何滥用行为承担责任。
