@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# 2026-05-11 优化
 """
 🎯 YujianAI Pro - 通用AI渗透测试平台
 🤖 支持任意网站、系统、API的智能安全测试
