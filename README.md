@@ -1,3 +1,4 @@
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12814/badge)](https://www.bestpractices.dev/projects/12814)
 **YujianAI Pro** is an intelligent, automated penetration testing platform that covers the full workflow from reconnaissance to report generation.
 # YujianAI Pro - 通用AI渗透测试平台
 
