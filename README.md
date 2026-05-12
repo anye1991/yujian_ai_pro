@@ -1,3 +1,4 @@
+**YujianAI Pro** is an intelligent, automated penetration testing platform that covers the full workflow from reconnaissance to report generation.
 # YujianAI Pro - 通用AI渗透测试平台
 
 **YujianAI Pro** 是一个基于AI驱动的通用渗透测试平台，支持对任意网站、系统和API进行智能化安全测试。平台集成了AI分析引擎、漏洞扫描模块和智能攻击策略，为安全研究人员、渗透测试工程师和企业安全团队提供一站式安全评估解决方案。
