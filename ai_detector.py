@@ -220,8 +220,14 @@ class UniversalDetector:
                 issues.append(description)
                 risk_score += 20
 
-        # 3. 检查调试信息
-        if 'debug' in content_lower or 'test' in content_lower:
+        # 3. 检查调试信息（需要更具体的特征，避免 test/debug 普通词汇误报）
+        debug_indicators = [
+            'traceback', 'stack trace', 'exception in thread',
+            'debug mode', 'debug=true', 'display_errors=on',
+            'error_reporting(e_all)', 'var_dump(', 'print_r(',
+            'notice: undefined', 'warning: include'
+        ]
+        if any(ind in content_lower for ind in debug_indicators):
             issues.append('调试信息泄露')
             risk_score += 15
 

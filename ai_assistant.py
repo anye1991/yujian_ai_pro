@@ -29,7 +29,7 @@ class UniversalAI_Tester:
         self.init_system()
 
     def load_config(self):
-        """加载配置"""
+        """加载配置：先读 config.yaml，缺失项回落到默认值"""
         default_config = {
             'ai': {
                 'model': 'mistral:7b',
@@ -52,7 +52,29 @@ class UniversalAI_Tester:
                 'rate_limit': 10  # 请求速率限制
             }
         }
-        return default_config
+
+        config_path = Path(__file__).parent / 'config.yaml'
+        if not config_path.exists():
+            return default_config
+
+        try:
+            import yaml
+            with open(config_path, 'r', encoding='utf-8') as f:
+                file_config = yaml.safe_load(f) or {}
+        except Exception as e:
+            print(f"⚠️  config.yaml 加载失败，使用默认配置: {e}")
+            return default_config
+
+        # 浅层合并（按顶级 key 合并，文件配置覆盖默认值）
+        merged = {**default_config, **file_config}
+
+        # config.yaml 里 scan.mode 对应代码中的 scan.depth
+        scan_cfg = merged.get('scan', {})
+        if 'mode' in scan_cfg and 'depth' not in scan_cfg:
+            scan_cfg['depth'] = scan_cfg['mode']
+        merged['scan'] = scan_cfg
+
+        return merged
 
     def init_system(self):
         """初始化系统"""
@@ -261,6 +283,13 @@ class UniversalAI_Tester:
         """检查常见漏洞"""
         vulns = []
 
+        # 数据库特有的错误特征（避免普通页面的 error/query 误报）
+        sql_error_patterns = [
+            'sql syntax', 'mysql_fetch', 'mysql_num_rows',
+            'ora-', 'postgresql', 'unclosed quotation mark',
+            'syntax error at or near', 'warning: mysql', 'sqlstate'
+        ]
+
         # SQL注入检查
         sql_payloads = ["'", "\"", "' OR '1'='1"]
         for payload in sql_payloads:
@@ -268,7 +297,9 @@ class UniversalAI_Tester:
             try:
                 import requests
                 resp = requests.get(test_url, timeout=5, verify=False)
-                if any(err in resp.text.lower() for err in ['sql', 'mysql', 'syntax']):
+                content = resp.text.lower()
+                matched = [p for p in sql_error_patterns if p in content]
+                if matched:
                     vulns.append({
                         'type': 'sql_injection',
                         'severity': 'high',
@@ -285,7 +316,9 @@ class UniversalAI_Tester:
         try:
             import requests
             resp = requests.get(test_url, timeout=5, verify=False)
-            if xss_payload in resp.text:
+            # 只在 HTML 响应中检测，排除 JSON 回显
+            content_type = resp.headers.get('Content-Type', '').lower()
+            if 'json' not in content_type and xss_payload in resp.text:
                 vulns.append({
                     'type': 'xss',
                     'severity': 'medium',
